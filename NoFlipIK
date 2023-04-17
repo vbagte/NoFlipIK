@@ -1,0 +1,89 @@
+#To use this script properly, first select the upper joint that has the ikHandle (like the hip)
+#Then, select the lower joint that has the ikHandle (like the ankle)
+#Next, select the pole vector handle for the ikHandle (like the L_Leg_PV)
+#Then activate it
+#Note: It’s not perfect yet
+
+from maya import cmds
+
+selection = cmds.ls(sl=1)
+print (selection)
+
+#Create the Top No Flip joints and orient them
+cmds.select(cl=1)
+topJointPosition = cmds.xform(selection[0], q = 1, translation = 1, worldSpace = 1)
+print(topJointPosition)
+topNoFlipJoint = cmds.joint(n = selection[0] + '_TopNoFlip', p = topJointPosition)
+topJointEndPosition = cmds.xform(selection[1], q = 1, translation = 1, worldSpace = 1)
+topNoFlipJointEnd = cmds.joint(n = selection[1] + '_TopNoFlip_End', p = topJointEndPosition)
+cmds.joint(topNoFlipJoint, oj = 'xyz', sao = 'xup', e= 1)
+cmds.joint(topNoFlipJointEnd, oj = 'none', e= 1)
+
+#Create the Bottom No Flip joints and orient them
+cmds.select(cl=1)
+bottomJointPosition = cmds.xform(selection[1], q = 1, translation = 1, worldSpace = 1)
+print(bottomJointPosition)
+bottomNoFlipJoint = cmds.joint(n = selection[1] + '_BottomNoFlip', p = bottomJointPosition)
+bottomJointEndPosition = cmds.xform(selection[0], q = 1, translation = 1, worldSpace = 1)
+bottomNoFlipJointEnd = cmds.joint(n = selection[0] + '_BottomNoFlip_End', p = bottomJointEndPosition)
+cmds.joint(bottomNoFlipJoint, oj = 'xyz', sao = 'xup', e= 1)
+cmds.joint(bottomNoFlipJointEnd, oj = 'none', e= 1)
+
+#Create 2 locators, parent one to the hip, other to the reverse ankle, move them a touch out to the side
+
+topNoFlipLoc = cmds.spaceLocator(n = 'topNoFlip_Loc')
+tempParentConstraint = cmds.parentConstraint(selection[0], topNoFlipLoc)
+cmds.delete(tempParentConstraint)
+cmds.parent(topNoFlipLoc, selection[0])
+cmds.move(1,0,0, r = 1)
+cmds.select(cl=1)
+bottomNoFlipLoc = cmds.spaceLocator(n = 'bottomNoFlip_Loc')
+#Should parent this to reverse ankle, but in order to make it more universal, I'm trying to parent it to the base ankle
+#Still need to test
+tempParentConstraint = cmds.parentConstraint(selection[1], bottomNoFlipLoc)
+cmds.delete(tempParentConstraint)
+cmds.parent(bottomNoFlipLoc, selection[1])
+cmds.move(1,0,0, r = 1)
+
+#Rotate plane solver both
+topNoFlipIK = cmds.ikHandle(n = selection[0] + '_topNoFlip_ikHandle', sj = topNoFlipJoint, ee = topNoFlipJointEnd, sol = 'ikRPsolver')
+bottomNoFlipIK = cmds.ikHandle(n = selection[1] + '_bottomNoFlip_ikHandle', sj = bottomNoFlipJoint, ee = bottomNoFlipJointEnd, sol = 'ikRPsolver')
+
+#Pole vector to the locators
+cmds.poleVectorConstraint(topNoFlipLoc, selection[0] + '_topNoFlip_ikHandle')
+cmds.poleVectorConstraint(bottomNoFlipLoc, selection[1] + '_bottomNoFlip_ikHandle')
+
+#Add top no flip IK and bottom no flip joints to reverse ankle
+cmds.parent(selection[0] + '_topNoFlip_ikHandle', selection[1])
+cmds.parent(bottomNoFlipJoint, selection[1])
+
+#Create a single joint for the hip connect
+cmds.select(cl=1)
+hipConnectJoint = cmds.joint(n = selection[0] + '_Connect', p = topJointPosition)
+
+#Put the hip, bottom no flip IK, top no flip joints, and top PV locator in the hip connect
+cmds.parent(selection[0], hipConnectJoint)
+cmds.parent(selection[1] + '_bottomNoFlip_ikHandle', topNoFlipJoint, topNoFlipLoc, hipConnectJoint)
+
+#Create 2 locators on the leg PV, parented under their no flip joints
+#pvPosition = cmds.xform(selection[2], q = 1, t = 1, worldSpace = 1)
+topNoFlipPVLoc= cmds.spaceLocator(n = selection[0] + '_topNoFlipPV_Loc')
+bottomNoFlipPVLoc= cmds.spaceLocator(n = selection[1] + '_bottomNoFlipPV_Loc')
+tempParentConstraint = cmds.parentConstraint(selection[2], topNoFlipPVLoc)
+cmds.delete(tempParentConstraint)
+tempParentConstraint = cmds.parentConstraint(selection[2], bottomNoFlipPVLoc)
+cmds.delete(tempParentConstraint)
+#cmds.matchTransform(topNoFlipPVLoc, selection[2], piv = 1)
+#cmds.matchTransform(bottomNoFlipPVLoc, selection[2], piv = 1)
+cmds.parent(topNoFlipPVLoc, topNoFlipJoint, r =1)
+cmds.parent(bottomNoFlipPVLoc, bottomNoFlipJoint, r =1)
+
+#Point constrain them to the PV Group
+cmds.pointConstraint(topNoFlipPVLoc, bottomNoFlipPVLoc, selection[2])
+
+#Clean it up by hiding the IKs and deleting the shapes of the locators
+cmds.setAttr(topNoFlipJoint + '.drawStyle', 2)
+cmds.setAttr(topNoFlipJointEnd + '.drawStyle', 2)
+cmds.setAttr(bottomNoFlipJoint + '.drawStyle', 2)
+cmds.setAttr(bottomNoFlipJointEnd + '.drawStyle', 2)
+cmds.hide(topNoFlipLoc, bottomNoFlipLoc, topNoFlipIK, bottomNoFlipIK, topNoFlipPVLoc, bottomNoFlipPVLoc, cs = 1) 
